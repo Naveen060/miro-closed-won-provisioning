@@ -1,6 +1,7 @@
 import http from 'node:http';
 
-const port = Number(process.env.MOCK_SYSTEMS_PORT ?? 8081);
+const port = Number(process.env.PORT ?? process.env.MOCK_SYSTEMS_PORT ?? 8081);
+const bindAddress = process.env.BIND_ADDRESS ?? '0.0.0.0';
 const netSuiteCustomers = new Map();
 const zendeskOrganizations = new Map();
 const zendeskAttempts = new Map();
@@ -125,7 +126,6 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`mock_systems_ready url=http://127.0.0.1:${port}`);
+server.listen(port, bindAddress, () => {
+  console.log(`mock_systems_ready url=http://${bindAddress}:${port}`);
 });
-
