@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: order-validation-service
+
+server:
+  port: ${PORT:8080}
+
+app:
+  security:
+    api-key: ${VALIDATION_API_KEY:local-demo-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} level=%-5level service=${spring.application.name} correlationId=%X{correlationId:-none} logger=%logger{36} message=\"%replace(%msg){'\"',''}\"%n"
+
