@@ -27,8 +27,8 @@ The repository is implementation-complete for the code, Workato recipe specifica
 
 ## Verification performed
 
-- Maven build on Java 21: success.
-- JUnit suite: 7 tests, 0 failures, 0 errors.
+- Clean Maven verification on Oracle JDK 21.0.1 (`.\mvnw.cmd clean verify`): success on July 30, 2026.
+- JUnit suite: 7 tests, 0 failures, 0 errors, 0 skipped.
 - Synchronized concurrency proof: 24 callers, 1 execution, 23 replays.
 - Workato batch runner: nine deterministic cases with correlation-ID reports.
 - Required Workato evidence: happy path plus Zendesk retry with no duplicate NetSuite customer.
