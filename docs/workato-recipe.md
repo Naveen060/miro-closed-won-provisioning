@@ -1,6 +1,6 @@
 # Workato recipe build sheet
 
-This is the preferred-platform version of the executable n8n workflow and local runner. It uses only the Webhooks and HTTP connectors, so no NetSuite or Zendesk sandbox is required.
+This is the canonical orchestration definition for this repository. It uses only the Webhooks and HTTP connectors, so no NetSuite or Zendesk sandbox is required.
 
 ## Connections and properties
 
@@ -10,7 +10,7 @@ Create HTTP connections for:
 - NetSuite mock base URL; and
 - Zendesk mock base URL.
 
-Store `VALIDATION_API_KEY` in the validation HTTP connection or the workspace secret manager. Do not put it in a formula or lookup table. For a local service, expose ports 8080 and 8081 through an approved development tunnel because Workato cannot call `localhost` on the candidate's machine.
+Store `VALIDATION_API_KEY` in the validation HTTP connection or the workspace secret manager. Do not put it in a formula or lookup table. Use the deployed validation and mock-service URLs; Workato cannot call `localhost` on the candidate's machine.
 
 ## Trigger sample
 
@@ -108,3 +108,4 @@ Post a new opportunity with `simulateZendeskFailure: true`. In job detail, verif
 
 The current Workato documentation describes a maximum of three retries and a one-to-ten-second interval for a Handle errors block: [Error handling best practices](https://docs.workato.com/recipes/best-practices-error-handling). The HTTP action and secret-storage behavior are documented under [Send request via HTTP](https://docs.workato.com/en/developing-connectors/http/building-http-action).
 
+For repeatable webhook testing, follow [batch-workflow-tests.md](batch-workflow-tests.md). The runner submits nine cases and records the correlation IDs needed to inspect final results in Workato Jobs.

@@ -8,7 +8,7 @@ Show the architecture diagram and requirement-coverage table in the root README.
 
 ## 0:40-1:30 - Show the recipe
 
-Open the Workato recipe or import `orchestration/n8n/closed-won-provisioning.json` into n8n.
+Open the Workato recipe and its job history.
 
 Point out:
 
@@ -21,23 +21,23 @@ Point out:
 
 ## 1:30-2:20 - Happy-path demo
 
-Run:
+Run the happy-path case:
 
 ```powershell
-.\scripts\run-demo.ps1 -Scenario success
+.\scripts\test-workato-workflow.ps1 -Cases HappyPath
 ```
 
-Call out the HTTP 200 validation, one NetSuite customer, one Zendesk organization, and final `PROVISIONED` result.
+Open the job by correlation ID. Call out the HTTP 200 validation, one NetSuite customer, one Zendesk organization, and successful final result.
 
 ## 2:20-3:30 - Required Zendesk 500 demo
 
-Run:
+Run the required failure case:
 
 ```powershell
-.\scripts\run-demo.ps1 -Scenario transient-failure
+.\scripts\test-workato-workflow.ps1 -Cases ZendeskTransientRecovery -ResetMockState
 ```
 
-Narrate the evidence:
+Open the job by correlation ID and narrate the evidence:
 
 - Zendesk attempt 1 returns the simulated 500;
 - only Zendesk is retried;
@@ -79,4 +79,3 @@ Run or show the result of:
 ```
 
 Close with: "The prototype proves the API contract, strict race-safe idempotency, and the Zendesk-only retry. The production design adds durable state, queued backpressure, cross-instance idempotency, and governed read access for AI."
-

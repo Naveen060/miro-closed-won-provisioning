@@ -22,8 +22,8 @@ Finally, the candidate records a 5-10 minute walkthrough showing a successful ru
 |---|---|---|
 | Validation service | Java 21 + Spring Boot | Clear HTTP, validation, security, and test primitives |
 | Idempotency | Concurrent map + shared future + payload hash | Makes the race winner explicit and proves one execution |
-| iPaaS artifact | n8n workflow JSON | Importable and runnable locally without commercial credentials |
-| Preferred platform mapping | Workato recipe build sheet | Shows the same recipe using Miro's stated primary platform |
+| iPaaS artifact | Workato recipe | Uses Miro's stated primary platform and the required HTTP/retry actions |
+| Recipe specification | Workato build sheet + webhook test harness | Makes the tenant-owned recipe reproducible and testable |
 | External systems | Dependency-free Node.js mocks | Deterministic success, replay, and one-time Zendesk 500 |
 | Verification | JUnit integration/concurrency tests + end-to-end runner | Covers behavior and provides demo-ready evidence |
 
@@ -32,7 +32,6 @@ Finally, the candidate records a 5-10 minute walkthrough showing a successful ru
 1. Implement API contract, auth, validation, correlation, and structured errors.
 2. Implement strict idempotency and a same-millisecond concurrency test.
 3. Implement idempotent downstream stubs and Zendesk-only retry orchestration.
-4. Produce n8n and Workato artifacts.
-5. Run unit, integration, concurrency, and two end-to-end scenarios.
+4. Build the Workato recipe and its repeatable webhook test harness.
+5. Run unit, integration, concurrency, and Workato end-to-end scenarios.
 6. Review the repository line by line against every assignment bullet.
-

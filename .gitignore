@@ -5,4 +5,7 @@ tmp/
 *.iml
 *.log
 .DS_Store
-
+test-results/*.json
+.env
+.env.*
+!.env.example

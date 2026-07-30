@@ -1,11 +1,11 @@
 # Closed-Won Provisioning Orchestration
 
-This repository is a working take-home prototype for provisioning a newly closed Salesforce deal. It contains:
+This repository is a Workato-first take-home prototype for provisioning a newly closed Salesforce deal. It contains:
 
 - a Java 21 / Spring Boot order-validation microservice;
-- a runnable saga simulator with idempotent NetSuite and transient-failure Zendesk stubs;
-- an importable n8n workflow as the executable iPaaS artifact;
-- an exact Workato recipe build sheet for the preferred platform; and
+- a Workato recipe build sheet with an HTTP webhook trigger and Zendesk-only retry boundary;
+- deployable, idempotent NetSuite and transient-failure Zendesk mock APIs;
+- a Workato webhook test harness with nine deterministic cases; and
 - production-readiness and video walkthrough notes.
 
 The key failure invariant is: **a Zendesk retry never re-enters the NetSuite creation step**.
@@ -14,9 +14,9 @@ The key failure invariant is: **a Zendesk retry never re-enters the NetSuite cre
 
 | Assignment requirement | Implementation |
 |---|---|
-| HTTP Closed-Won trigger | n8n `Closed Won Webhook` node; Workato webhook instructions |
+| HTTP Closed-Won trigger | Workato **New event via HTTP webhook** trigger |
 | Call Java/Kotlin validator | `POST /api/v1/orders/validate` |
-| NetSuite and Zendesk stubs | `demo/mock-systems.mjs` |
+| NetSuite and Zendesk stubs | `demo/mock-systems.mjs`, deployed for Workato access |
 | Zendesk 500 saga behavior | Zendesk-only retry boundary, demonstrated and asserted by downstream call counts |
 | Mock API key | Constant-time `X-API-Key` filter |
 | Required fields | Bean validation for `accountId` and `totalAmount`; HTTP 400 |
@@ -27,7 +27,7 @@ The key failure invariant is: **a Zendesk retry never re-enters the NetSuite cre
 
 ## Quick start
 
-Prerequisites: Java 21 and Node.js 20 or newer. The Maven wrapper downloads Maven automatically.
+Prerequisite for the validator: Java 21. The Maven wrapper downloads Maven automatically.
 
 Run the automated tests:
 
@@ -41,36 +41,20 @@ On Windows PowerShell:
 .\mvnw.cmd test
 ```
 
-Run both end-to-end demo scenarios on Windows:
+Preview all Workato webhook test payloads without consuming Workato credits:
 
 ```powershell
-.\scripts\run-demo.ps1
+.\scripts\test-workato-workflow.ps1 -PreviewOnly
 ```
 
-The script starts the service and mocks, runs a normal provisioning, runs a transient Zendesk 500, prints proof counters, and stops only the processes it started. For the failure scenario, the expected proof is:
+After starting or testing the Workato recipe, set its webhook URL and run the suite:
 
-```json
-{
-  "netSuiteCalls": 1,
-  "netSuiteCustomers": 1,
-  "zendeskCalls": 2,
-  "zendeskOrganizations": 1
-}
+```powershell
+$env:WORKATO_WEBHOOK_URL = "https://www.workato.com/webhooks/..."
+.\scripts\test-workato-workflow.ps1 -ResetMockState
 ```
 
-That is the saga requirement in observable form: NetSuite is called once while Zendesk is retried and eventually succeeds.
-
-### Manual run
-
-In three terminals:
-
-```bash
-./mvnw spring-boot:run
-node demo/mock-systems.mjs
-node demo/run-workflow.mjs --scenario=transient-failure
-```
-
-Use `--scenario=success` for the happy path.
+The suite submits happy-path, Zendesk-retry, validation-failure, replay, and conflict cases. Use each generated correlation ID to verify the final result in Workato Jobs. See [docs/batch-workflow-tests.md](docs/batch-workflow-tests.md).
 
 ## Validation API
 
@@ -123,9 +107,7 @@ The concurrency test releases 24 requests at once and proves that the operation 
 
 ## Orchestration design
 
-The executable n8n workflow is [orchestration/n8n/closed-won-provisioning.json](orchestration/n8n/closed-won-provisioning.json). Import it into n8n, replace the demo API key, and update `host.docker.internal` if n8n does not run in Docker.
-
-The preferred Workato version is specified step-by-step in [docs/workato-recipe.md](docs/workato-recipe.md). The design follows Workato's current [Handle errors](https://docs.workato.com/recipes/best-practices-error-handling) behavior: only the Zendesk HTTP action is inside the monitored block, with up to three retries. NetSuite is deliberately before that block. Workato's [HTTP connector guidance](https://docs.workato.com/en/developing-connectors/http/building-http-action) is also why secrets belong in a connection or secret manager rather than a recipe field.
+The Workato recipe is specified step-by-step in [docs/workato-recipe.md](docs/workato-recipe.md). Only the Zendesk HTTP action is inside Workato's **Handle errors** monitor block, with up to three retries. NetSuite is deliberately before that block, so a Zendesk retry cannot create another NetSuite customer. Secrets belong in Workato Connections or the workspace secret manager, never in recipe formulas or repository files.
 
 ```mermaid
 flowchart LR
@@ -231,23 +213,23 @@ The result includes state, completed steps, last safe error category, next retry
 ## Repository map
 
 ```text
-src/main/java/             Spring Boot service
+src/main/java/             Spring Boot validation service
 src/test/java/             API, idempotency, failure, and race tests
-demo/                      NetSuite/Zendesk stubs and local saga runner
-orchestration/n8n/         Importable iPaaS workflow
-docs/workato-recipe.md     Preferred-platform recipe build sheet
+demo/                      Deployable NetSuite/Zendesk mock service used by Workato
+docs/workato-recipe.md     Workato recipe build sheet
+docs/batch-workflow-tests.md Workato batch-test instructions
 docs/assignment-summary.md Condensed brief and solution plan
 docs/submission-review.md  Final rubric audit and remaining manual items
 docs/walkthrough-script.md 5-10 minute presentation script
-scripts/run-demo.ps1       One-command local demo
+scripts/test-workato-workflow.ps1 Workato webhook test harness
+.env.example               Non-secret Workato test configuration template
 ```
 
 ## Prototype boundaries
 
 - The assignment explicitly asks for in-memory service state. Production requires a durable idempotency/saga store shared by all instances, with TTL/archival and payload-hash uniqueness.
 - The downstream APIs are deterministic mocks; real connectors require sandbox credentials, schema mapping, and contract tests.
-- The n8n JSON is runnable without a Workato account. The Workato build sheet uses the same retry boundary, headers, and payloads; publishing it is intentionally account-bound.
+- The Workato recipe itself is tenant-owned. This repository contains its exact build sheet and a repeatable webhook test harness; publishing or exporting the live recipe remains account-bound.
 - API-key auth satisfies the exercise. Production should use short-lived workload identity (mTLS/OAuth 2.0) plus network policy.
 
 The final rubric audit is in [docs/submission-review.md](docs/submission-review.md).
-
