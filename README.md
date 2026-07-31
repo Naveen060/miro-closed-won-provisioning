@@ -187,25 +187,105 @@ A local mock run produced exactly those call counts.
 
 ### NetSuite limit and Sunday outage
 
-I would place a durable queue between event intake and NetSuite. A dedicated worker would allow no more than five active NetSuite requests. During the two-hour Sunday outage, events would stay in the queue. After recovery, the worker would drain the backlog at the same five-request limit.
+I would separate event intake from NetSuite delivery:
 
-Every message would have an idempotency key, retry count, next-attempt time, and dead-letter path. The lifecycle table would show `NETSUITE_PENDING`, `RETRY_SCHEDULED`, or `NEEDS_ATTENTION` so no deal disappears silently.
+```text
+Salesforce event
+-> Workato ingress recipe
+-> durable Pub/Sub topic or message queue
+-> NetSuite worker
+-> NetSuite
+```
+
+The ingress recipe acknowledges the Salesforce event only after the queue confirms that the message is stored. If Workato stops after accepting the webhook, the event still remains in the queue. Queue retention must be longer than the outage and recovery window.
+
+Only the NetSuite worker is allowed to use the NetSuite connection. Its global concurrency is set to `5`, so the entire integration can have no more than five active NetSuite requests. This can be enforced with Workato recipe concurrency when one workspace owns all NetSuite traffic. If several applications share the account, I would use a central dispatcher with a distributed semaphore of five permits.
+
+A maintenance schedule pauses the worker during the two-hour Sunday outage. Incoming Closed Won events continue to enter the queue with lifecycle state `NETSUITE_PENDING`. Unexpected `429` or `5xx` responses open a circuit breaker and reschedule the message with exponential backoff and jitter.
+
+When NetSuite returns, the worker drains the backlog at the same five-request limit. It does not start all waiting requests at once. Each command uses `<opportunityId>:netsuite` as its idempotency key or NetSuite external ID, so queue redelivery cannot create a second customer.
+
+After the retry limit, the message goes to a dead-letter queue and the lifecycle row changes to `NEEDS_ATTENTION`. Alerts monitor queue depth, oldest-message age, retry count, dead-letter count, circuit state, and the five available permits. No deal is deleted merely because NetSuite is unavailable.
 
 ### Observability
 
-Salesforce creates a correlation ID when it publishes the event. Workato stores it and sends it as `X-Correlation-Id` to Java, NetSuite, and Zendesk. Each service writes structured logs containing the correlation ID, step, result, duration, and retry count.
+Salesforce creates a UUID when the Closed Won event is published. It places that value in `correlation_id`. Workato keeps the same value in the job, queue message, and lifecycle table. If an older producer sends no ID, the ingress recipe creates one once and uses it for the rest of the order.
 
-Datadog or Splunk can then find one order across all services using a single correlation ID. Raw request bodies, email addresses, credentials, and access tokens are not logged.
+Every HTTP request includes:
+
+```text
+X-Correlation-Id: <original Salesforce correlation ID>
+```
+
+The Java service reads the header into its logging context and returns it in the response. NetSuite and Zendesk adapters receive the same header. When distributed tracing is available, the services also propagate the W3C `traceparent` header while keeping the business correlation ID for support searches.
+
+The lifecycle row links:
+
+- correlation ID;
+- Salesforce event and opportunity IDs;
+- Workato job ID;
+- validation, NetSuite, and Zendesk IDs;
+- current state, retry count, and timestamps.
+
+Each component writes structured events with `correlationId`, `service`, `step`, `result`, `durationMs`, `retryCount`, and a safe error category. Datadog or Splunk can reconstruct one order with a query such as:
+
+```text
+correlationId:CORR-1001
+```
+
+Dashboards show end-to-end latency, success rate, per-step failures, retry volume, queue age, and final-state counts. Alerts link back to the lifecycle record and Workato job.
 
 ### Credentials and PII
 
-Salesforce, NetSuite, and Zendesk use separate least-privilege service accounts. Credentials are stored in Workato Connections backed by an enterprise secret manager. They are never placed in Git, formulas, lookup tables, or log messages.
+Salesforce, NetSuite, and Zendesk use separate least-privilege service accounts. Their credentials are stored in Workato Connections backed by the approved enterprise secret manager, such as AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, or HashiCorp Vault. Recipes contain connection references, not passwords or tokens.
 
-Rotation uses an overlap period: create the replacement credential, update and test the connection, then revoke the previous credential. Log pipelines allow only approved diagnostic fields and redact headers and payloads.
+Secrets are separated by environment and system. A development recipe cannot read production credentials. Access to edit or use a connection is controlled with workspace roles and is audited. Secrets are never stored in Git, recipe formulas, lookup tables, lifecycle rows, or test reports.
+
+Rotation follows this order:
+
+1. create the replacement credential;
+2. store it in the vault;
+3. update the Workato connection;
+4. run a health check or sandbox transaction;
+5. monitor the new credential;
+6. revoke the previous credential; and
+7. record the rotation in the audit system.
+
+The short overlap avoids downtime. Expiry alerts start rotation before a credential becomes invalid. Emergency revocation follows the same connection update process with a shorter overlap.
+
+Logs use an allow-list rather than printing request bodies. Safe fields include correlation ID, opaque record IDs, state, duration, retry count, and error category. Customer names, email addresses, billing details, authorization headers, cookies, tokens, and complete payloads are removed or masked before they reach Datadog or Splunk. Debug logging is time-limited, access-controlled, and disabled by default. Retention, encryption, regional storage, and log access follow Miro's data-classification policy.
 
 ### Slack AI and MCP
 
-I would expose a read-only tool named `get_provisioning_status`. It would query a sanitized lifecycle read model by opportunity ID or account name.
+I would expose the lifecycle table through a small read-only status service. The Slack LLM Agent would call that service as a Tool or MCP endpoint instead of calling Salesforce, NetSuite, and Zendesk directly.
+
+```text
+Sales Rep in Slack
+-> Slack LLM Agent
+-> get_provisioning_status MCP tool
+-> sanitized lifecycle read model
+```
+
+The tool contract is:
+
+```json
+{
+  "name": "get_provisioning_status",
+  "description": "Return the current provisioning state for one Closed Won deal.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "opportunityId": { "type": "string" },
+      "accountName": { "type": "string" }
+    },
+    "anyOf": [
+      { "required": ["opportunityId"] },
+      { "required": ["accountName"] }
+    ],
+    "additionalProperties": false
+  }
+}
+```
 
 Example result:
 
@@ -215,11 +295,15 @@ Example result:
   "accountName": "Acme Corp",
   "state": "PROVISIONED",
   "completedSteps": ["VALIDATION", "NETSUITE", "ZENDESK"],
+  "lastSafeErrorCategory": null,
+  "nextRetryAt": null,
   "updatedAt": "2026-07-30T20:55:30Z"
 }
 ```
 
-The tool would not call every downstream system during a Slack question. It would read the stored state, apply the Slack user's permissions, return no secrets or unnecessary PII, and audit every query.
+The MCP gateway forwards the Slack user's identity and checks that the user may view the requested account. Searching by account name can return several deals, so the tool asks the user to select one instead of guessing. The response contains status information but no credentials, customer email, billing data, or raw downstream payloads.
+
+Every tool call is audited with user ID, tool name, requested business ID, result, and timestamp. The status tool cannot modify the workflow. A separate `retry_provisioning` tool would require stronger authorization, an explicit confirmation, and its own audit record.
 
 ## Prototype boundaries
 
