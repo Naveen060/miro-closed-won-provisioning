@@ -5,8 +5,10 @@ const bindAddress = process.env.BIND_ADDRESS ?? '0.0.0.0';
 const netSuiteCustomers = new Map();
 const zendeskOrganizations = new Map();
 const zendeskAttempts = new Map();
+const provisioningAlerts = new Map();
 let netSuiteCalls = 0;
 let zendeskCalls = 0;
+let alertCalls = 0;
 
 function send(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json' });
@@ -44,8 +46,10 @@ const server = http.createServer(async (request, response) => {
       netSuiteCustomers.clear();
       zendeskOrganizations.clear();
       zendeskAttempts.clear();
+      provisioningAlerts.clear();
       netSuiteCalls = 0;
       zendeskCalls = 0;
+      alertCalls = 0;
       send(response, 200, { reset: true });
       return;
     }
@@ -57,6 +61,8 @@ const server = http.createServer(async (request, response) => {
         zendeskCalls,
         zendeskOrganizations: zendeskOrganizations.size,
         zendeskAttempts: Object.fromEntries(zendeskAttempts),
+        alertCalls,
+        provisioningAlerts: provisioningAlerts.size,
       });
       return;
     }
@@ -117,6 +123,61 @@ const server = http.createServer(async (request, response) => {
       zendeskOrganizations.set(headers.idempotencyKey, organization);
       console.log(`system=zendesk correlationId=${headers.correlationId} attempt=${attempt} status=201`);
       send(response, 201, { ...organization, replayed: false });
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/alerts/provisioning') {
+      const body = await readJson(request);
+      const requiredFields = [
+        'eventId',
+        'correlationId',
+        'opportunityId',
+        'state',
+        'failedStep',
+        'errorCategory',
+      ];
+      const missingFields = requiredFields.filter(
+        (field) => body[field] === undefined || body[field] === null || body[field] === '',
+      );
+
+      if (missingFields.length > 0) {
+        send(response, 400, {
+          code: 'MISSING_FIELDS',
+          message: `Missing required fields: ${missingFields.join(', ')}`,
+        });
+        return;
+      }
+
+      alertCalls += 1;
+      const alertId = `alert-${String(alertCalls).padStart(4, '0')}`;
+      const alert = {
+        alertId,
+        eventId: body.eventId,
+        correlationId: body.correlationId,
+        opportunityId: body.opportunityId,
+        state: body.state,
+        failedStep: body.failedStep,
+        errorCategory: body.errorCategory,
+        retryCount: Number(body.retryCount ?? 0),
+        acceptedAt: new Date().toISOString(),
+      };
+      provisioningAlerts.set(alertId, alert);
+
+      // Log operational identifiers only. Do not include customer names, emails, or other PII.
+      console.log(
+        `system=provisioning-alert alertId=${alertId}`
+          + ` correlationId=${body.correlationId}`
+          + ` opportunityId=${body.opportunityId}`
+          + ` state=${body.state}`
+          + ` failedStep=${body.failedStep}`,
+      );
+
+      send(response, 202, {
+        accepted: true,
+        alertId,
+        correlationId: body.correlationId,
+        state: body.state,
+      });
       return;
     }
 
