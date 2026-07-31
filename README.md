@@ -40,15 +40,15 @@ The Workato data table is the lifecycle record. It supports duplicate detection,
 ## Repository structure
 
 ```text
-src/main/java/                  Java validation service
-src/test/java/                  API and concurrency tests
-demo/mock-systems.mjs           NetSuite and Zendesk mock APIs
-scripts/test-workato-workflow.ps1
+services/order-validation/      Java validation service and tests
+services/mock-systems/          NetSuite and Zendesk mock APIs
+workato/docs/recipe.md           Exact 17-step recipe
+workato/docs/testing.md          Workato test instructions
+workato/scripts/test-workflow.ps1
                                 Workato webhook test runner
-docs/workato-recipe.md          Exact 17-step recipe
-docs/batch-workflow-tests.md    Test instructions
-docs/assignment-summary.md      Architecture answers
-docs/walkthrough-script.md      Demonstration outline
+docs/architecture.md            Production design answers
+docs/demo-walkthrough.md        Demonstration outline
+docs/submission-checklist.md    Final review checklist
 ```
 
 ## Run the Java tests
@@ -63,13 +63,17 @@ Windows:
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
-.\mvnw.cmd clean verify
+.\services\order-validation\mvnw.cmd `
+  -f .\services\order-validation\pom.xml `
+  clean verify
 ```
 
 macOS or Linux:
 
 ```bash
-./mvnw clean verify
+./services/order-validation/mvnw \
+  -f ./services/order-validation/pom.xml \
+  clean verify
 ```
 
 Current local result:
@@ -146,14 +150,14 @@ Webhook
 -> PROVISIONED or NEEDS_ATTENTION
 ```
 
-The complete mapping is in [docs/workato-recipe.md](docs/workato-recipe.md).
+The complete mapping is in [workato/docs/recipe.md](workato/docs/recipe.md).
 
 ## Test the Workato recipe
 
 Preview two important cases without sending webhooks or using Workato credits:
 
 ```powershell
-.\scripts\test-workato-workflow.ps1 `
+.\workato\scripts\test-workflow.ps1 `
   -PreviewOnly `
   -Cases HappyPath,ZendeskTransientRecovery
 ```
@@ -162,7 +166,7 @@ Run them against a listening recipe:
 
 ```powershell
 $env:WORKATO_WEBHOOK_URL = "https://webhooks.example/replace-me"
-.\scripts\test-workato-workflow.ps1 `
+.\workato\scripts\test-workflow.ps1 `
   -Cases HappyPath,ZendeskTransientRecovery `
   -ResetMockState
 ```

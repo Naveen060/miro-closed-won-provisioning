@@ -5,7 +5,7 @@ The PowerShell runner creates nested webhook payloads that match the current Wor
 ## Preview without using credits
 
 ```powershell
-.\scripts\test-workato-workflow.ps1 `
+.\workato\scripts\test-workflow.ps1 `
   -PreviewOnly `
   -Cases HappyPath,ZendeskTransientRecovery
 ```
@@ -17,7 +17,7 @@ Put the Workato recipe in Test mode or start it. Then run:
 ```powershell
 $env:WORKATO_WEBHOOK_URL = "https://webhooks.example/replace-me"
 
-.\scripts\test-workato-workflow.ps1 `
+.\workato\scripts\test-workflow.ps1 `
   -Cases HappyPath,ZendeskTransientRecovery `
   -ResetMockState
 ```
@@ -41,8 +41,8 @@ The webhook URL is intentionally not stored in Git.
 Run paired cases together:
 
 ```powershell
-.\scripts\test-workato-workflow.ps1 -Cases DuplicateFirst,DuplicateReplay
-.\scripts\test-workato-workflow.ps1 -Cases ConflictSeed,ConflictChanged
+.\workato\scripts\test-workflow.ps1 -Cases DuplicateFirst,DuplicateReplay
+.\workato\scripts\test-workflow.ps1 -Cases ConflictSeed,ConflictChanged
 ```
 
 ## Evidence to collect

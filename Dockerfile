@@ -1,7 +1,7 @@
 FROM maven:3.9.11-eclipse-temurin-21 AS build
 WORKDIR /workspace
-COPY pom.xml ./
-COPY src ./src
+COPY services/order-validation/pom.xml ./
+COPY services/order-validation/src ./src
 RUN mvn --batch-mode --no-transfer-progress package
 
 FROM eclipse-temurin:21-jre-alpine

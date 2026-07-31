@@ -24,7 +24,9 @@ Run:
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
-.\mvnw.cmd clean verify
+.\services\order-validation\mvnw.cmd `
+  -f .\services\order-validation\pom.xml `
+  clean verify
 ```
 
 Expected result: seven tests pass and the build succeeds.

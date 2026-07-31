@@ -303,7 +303,7 @@ if (-not $PreviewOnly) {
     $stateAfter = Get-MockState -BaseUrl $MockBaseUrl
 }
 
-$resultDirectory = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\test-results"))
+$resultDirectory = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\..\test-results"))
 New-Item -ItemType Directory -Path $resultDirectory -Force | Out-Null
 $reportPath = Join-Path $resultDirectory "workato-suite-$runId.json"
 
