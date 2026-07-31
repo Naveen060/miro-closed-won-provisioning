@@ -33,7 +33,7 @@ I expect seven tests to pass and the build to succeed.
 
 ## 3. Workato recipe
 
-I show my recipe from Step 1 through Step 17.
+I show my recipe from Step 1 through Step 19.
 
 I call out:
 
@@ -41,7 +41,8 @@ I call out:
 - lifecycle data table;
 - Java validation call;
 - NetSuite before the monitor block;
-- only Zendesk inside the monitor block;
+- only the Zendesk in-progress update and Zendesk HTTP call inside the monitor block;
+- a PII-safe alert after persistent Zendesk failure;
 - `NEEDS_ATTENTION` failure update;
 - `PROVISIONED` success update.
 

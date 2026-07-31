@@ -44,7 +44,7 @@ I use the Workato data table as the lifecycle record. It supports duplicate dete
 ```text
 services/order-validation/      Java validation service and tests
 services/mock-systems/          NetSuite and Zendesk mock APIs
-workato/docs/recipe.md           Exact 17-step recipe
+workato/docs/recipe.md           Exact 19-step recipe
 workato/docs/testing.md          Workato test instructions
 workato/scripts/test-workflow.ps1
                                 Workato webhook test runner

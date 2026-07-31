@@ -41,4 +41,4 @@ Zendesk attempt 2: HTTP 201
 - [ ] Git history contains no secrets
 - [ ] README commands work from a clean clone
 - [ ] Demonstration video is five to ten minutes
-- [ ] Repository link is accessible to the reviewer
+- [x] Repository link is accessible to the reviewer

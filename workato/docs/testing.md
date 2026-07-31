@@ -50,7 +50,7 @@ Run paired cases together:
 For the happy path, I verify:
 
 - job result is Successful;
-- Step 17 ran;
+- Step 19 ran;
 - lifecycle state is `PROVISIONED`;
 - NetSuite and Zendesk IDs are stored.
 
@@ -59,7 +59,7 @@ For transient recovery, I verify:
 - Java ran once;
 - NetSuite ran once;
 - the first Zendesk request returned HTTP 500;
-- Workato retried Step 13;
+- Workato retried the monitored Steps 13 and 14;
 - Zendesk later succeeded;
 - final state is `PROVISIONED`.
 

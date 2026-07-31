@@ -74,14 +74,16 @@ Important columns include:
 | 9 | HTTP NetSuite mock | `POST /netsuite/customers` |
 | 10 | Update record | State `NETSUITE_CREATED`; store customer ID and replay flag |
 | 11 | Update record | State `ZENDESK_PENDING` |
-| 12 | Handle errors | Monitor only the Zendesk action |
-| 13 | HTTP Zendesk mock | `POST /zendesk/organizations` |
-| 14 | Retry | Retry monitored action up to 3 times, 2 seconds apart |
-| 15 | Update persistent failure | State `NEEDS_ATTENTION`; save retry and safe error fields |
-| 16 | Stop job as failed | Explain that Zendesk failed after retries |
-| 17 | Update successful result | State `PROVISIONED`; store Zendesk organization ID |
+| 12 | Handle errors | Monitor only Steps 13 and 14; NetSuite remains outside this boundary |
+| 13 | Update record | State `ZENDESK_IN_PROGRESS` before each monitored attempt |
+| 14 | HTTP Zendesk mock | `POST /zendesk/organizations` |
+| 15 | Retry | Retry monitored Steps 13 and 14 up to 3 times, 2 seconds apart |
+| 16 | Update persistent failure | State `NEEDS_ATTENTION`; save retry and safe error fields |
+| 17 | HTTP failure alert | `POST /alerts/provisioning` with identifiers and safe error metadata only |
+| 18 | Stop job as failed | Explain that Zendesk failed after retries and the failure was persisted |
+| 19 | Update successful result | State `PROVISIONED`; store Zendesk organization ID |
 
-Step 17 is outside the persistent-error branch. When it finishes, Workato ends the job successfully automatically.
+Step 19 is outside the persistent-error branch. When it finishes, Workato ends the job successfully automatically.
 
 ## Step 7: Java validation
 
@@ -117,7 +119,7 @@ X-Correlation-Id: <correlation_id>
 
 I keep NetSuite outside the Zendesk monitor so a Zendesk retry cannot rerun it.
 
-## Step 13: Zendesk mock
+## Step 14: Zendesk mock
 
 ```text
 Method: POST
@@ -151,11 +153,41 @@ Response schema:
 }
 ```
 
+## Step 17: Persistent-failure alert
+
+```text
+Method: POST
+Path: /alerts/provisioning
+Connection: Provisioning Mock Systems v2
+Content type: Raw JSON
+Mark non-2xx as success: No
+```
+
+```json
+{
+  "eventId": "<Step 1 event_id>",
+  "correlationId": "<Step 1 correlation_id>",
+  "opportunityId": "<Step 1 opportunity.opportunity_id>",
+  "state": "NEEDS_ATTENTION",
+  "failedStep": "ZENDESK_CREATE",
+  "errorCategory": "DOWNSTREAM_5XX",
+  "retryCount": 3
+}
+```
+
+I exclude account names, email addresses, and other PII from this alert.
+
 ## Final states
 
 ```text
-PROVISIONED       all required actions completed
-NEEDS_ATTENTION   Zendesk still failed after retries
+RECEIVED              lifecycle record created
+VALIDATION_PENDING    waiting for Java validation
+VALIDATED             validation completed
+NETSUITE_CREATED       NetSuite mock completed
+ZENDESK_PENDING        waiting to start Zendesk provisioning
+ZENDESK_IN_PROGRESS    a monitored Zendesk attempt is running
+PROVISIONED            all required actions completed
+NEEDS_ATTENTION        Zendesk still failed after retries
 ```
 
-I allow the successful path to end automatically after Step 17. I end the persistent failure path explicitly at Step 16.
+I allow the successful path to end automatically after Step 19. I end the persistent failure path explicitly at Step 18 after recording the failure and sending the alert.
