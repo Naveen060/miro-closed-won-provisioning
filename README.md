@@ -1,14 +1,16 @@
 # Closed-Won Provisioning
 
-I built this project to automate customer provisioning after a Salesforce opportunity becomes **Closed Won**.
+**Designed and implemented by Venkata Naveen Chava**
 
-Workato receives the event and coordinates three operations:
+I built this project to automate customer provisioning after a Salesforce opportunity becomes **Closed Won**. My goal was to keep the orchestration reliable, traceable, secure, and easy to recover when a downstream system fails.
 
-1. validate the order with a Java service;
-2. create a customer in a NetSuite mock API; and
-3. create an organization in a Zendesk mock API.
+I use Workato to receive the event and coordinate three operations:
 
-The important failure case is a temporary Zendesk error. Workato retries only the Zendesk step. It does not create the NetSuite customer again.
+1. Validate the order with a Java service.
+2. Create a customer in a NetSuite mock API.
+3. Create an organization in a Zendesk mock API.
+
+I designed the most important failure path around a temporary Zendesk error. Workato retries only the Zendesk step and does not create the NetSuite customer again.
 
 ## What is in this repository
 
@@ -35,7 +37,7 @@ flowchart TD
     RT -->|"retries exhausted"| NA["NEEDS_ATTENTION"]
 ```
 
-The Workato data table is the lifecycle record. It supports duplicate detection, recovery, status lookup, and correlation across systems.
+I use the Workato data table as the lifecycle record. It supports duplicate detection, recovery, status lookup, and correlation across systems.
 
 ## Repository structure
 
@@ -85,7 +87,7 @@ Errors: 0
 BUILD SUCCESS
 ```
 
-The tests cover authentication, required fields, successful validation, idempotent replay, changed-payload conflict, and simultaneous requests with the same key.
+I use these tests to cover authentication, required fields, successful validation, idempotent replay, changed-payload conflict, and simultaneous requests with the same key.
 
 ## Validation API
 
@@ -120,11 +122,11 @@ The prototype key is only for local testing. A deployed environment must provide
 
 ## Idempotency and concurrency
 
-The Java service stores an idempotency key, a request fingerprint, and a shared future in a `ConcurrentHashMap`.
+I implemented the Java service so it stores an idempotency key, a request fingerprint, and a shared future in a `ConcurrentHashMap`.
 
 The first caller performs the validation. Concurrent callers with the same key and body wait for the same result. A caller using the same key with a different body receives `409 Conflict`.
 
-Each Workato side effect also has its own stable key:
+I also give each Workato side effect its own stable key:
 
 ```text
 <opportunityId>:validation
@@ -132,11 +134,11 @@ Each Workato side effect also has its own stable key:
 <opportunityId>:zendesk
 ```
 
-This protects both automatic retries and manual job replay.
+This design protects both automatic retries and manual job replay.
 
 ## Workato implementation
 
-The recipe uses a nested Salesforce-style webhook payload and a `Provisioning Status v2` data table.
+I built the recipe with a nested Salesforce-style webhook payload and a `Provisioning Status v2` data table.
 
 Its main stages are:
 
@@ -181,7 +183,7 @@ Zendesk second result: success
 Final lifecycle state: PROVISIONED
 ```
 
-A local mock run produced exactly those call counts.
+I ran the mocks locally and produced exactly those call counts.
 
 ## Production design
 
@@ -209,7 +211,7 @@ After the retry limit, the message goes to a dead-letter queue and the lifecycle
 
 ### Observability
 
-Salesforce creates a UUID when the Closed Won event is published. It places that value in `correlation_id`. Workato keeps the same value in the job, queue message, and lifecycle table. If an older producer sends no ID, the ingress recipe creates one once and uses it for the rest of the order.
+In production, I would generate a UUID in Salesforce when the Closed Won event is published and place it in `correlation_id`. I would keep the same value in the Workato job, queue message, and lifecycle table. If an older producer sent no ID, I would generate one once in the ingress recipe and use it for the rest of the order.
 
 Every HTTP request includes:
 
@@ -237,7 +239,7 @@ Dashboards show end-to-end latency, success rate, per-step failures, retry volum
 
 ### Credentials and PII
 
-Salesforce, NetSuite, and Zendesk use separate least-privilege service accounts. Their credentials are stored in Workato Connections backed by the approved enterprise secret manager, such as AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, or HashiCorp Vault. Recipes contain connection references, not passwords or tokens.
+I use separate least-privilege service accounts for Salesforce, NetSuite, and Zendesk. I store their credentials in Workato Connections backed by the approved enterprise secret manager, such as AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, or HashiCorp Vault. My recipes contain connection references, not passwords or tokens.
 
 Secrets are separated by environment and system. A development recipe cannot read production credentials. Access to edit or use a connection is controlled with workspace roles and is audited. Secrets are never stored in Git, recipe formulas, lookup tables, lifecycle rows, or test reports.
 
@@ -314,4 +316,4 @@ Every tool call is audited with user ID, tool name, requested business ID, resul
 
 ## Security note
 
-Do not commit real API keys, Workato webhook URLs, customer information, or exported connections. Use `.env.example` only as a list of required variable names.
+I do not commit real API keys, Workato webhook URLs, customer information, or exported connections. I use `.env.example` only as a list of required variable names.

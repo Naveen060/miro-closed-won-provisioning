@@ -1,6 +1,8 @@
 # Submission checklist
 
-## Implemented
+I use this checklist to verify my work before I submit it.
+
+## What I implemented
 
 - [x] Java 21 Spring Boot service
 - [x] `POST /api/v1/orders/validate`
@@ -18,17 +20,17 @@
 - [x] Workato test harness
 - [x] production design answers
 
-## Verified locally
+## What I verified locally
 
 ```text
 Java tests: 7 passed, 0 failed
 Maven result: BUILD SUCCESS
-Local Saga: NetSuite 1 call, Zendesk 2 calls
+Local Saga: NetSuite calls: 1, Zendesk calls: 2
 Zendesk attempt 1: HTTP 500
 Zendesk attempt 2: HTTP 201
 ```
 
-## Verify before sending
+## What I will verify before sending
 
 - [ ] Workato happy-path job is Successful
 - [ ] Workato transient Zendesk job is Successful after retry

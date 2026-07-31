@@ -1,16 +1,16 @@
 # Demonstration outline
 
-This outline fits a five-to-ten-minute recording.
+I use this outline for my five-to-ten-minute recording.
 
 ## 1. Problem and design
 
-Explain that Salesforce sends a Closed Won event to Workato. Workato validates the order, creates a NetSuite customer, and creates a Zendesk organization.
+I explain that Salesforce sends a Closed Won event to Workato. I then show how Workato validates the order, creates a NetSuite customer, and creates a Zendesk organization.
 
-Point out the main rule: a Zendesk retry must never create the NetSuite customer again.
+I point out my main rule: a Zendesk retry must never create the NetSuite customer again.
 
 ## 2. Java service
 
-Show:
+I show:
 
 - `POST /api/v1/orders/validate`
 - required `accountId` and `totalAmount`
@@ -19,7 +19,7 @@ Show:
 - in-memory idempotency implementation
 - concurrent-request test
 
-Run:
+I run:
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
@@ -29,13 +29,13 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
   clean verify
 ```
 
-Expected result: seven tests pass and the build succeeds.
+I expect seven tests to pass and the build to succeed.
 
 ## 3. Workato recipe
 
-Show the recipe from Step 1 through Step 17.
+I show my recipe from Step 1 through Step 17.
 
-Call out:
+I call out:
 
 - event duplicate check;
 - lifecycle data table;
@@ -47,7 +47,7 @@ Call out:
 
 ## 4. Happy path
 
-Run `HappyPath` and show:
+I run `HappyPath` and show:
 
 - successful Workato job;
 - one NetSuite call;
@@ -57,7 +57,7 @@ Run `HappyPath` and show:
 
 ## 5. Required Saga path
 
-Run `ZendeskTransientRecovery` and show:
+I run `ZendeskTransientRecovery` and show:
 
 - first Zendesk attempt returns 500;
 - Workato retries the monitored Zendesk action;
@@ -65,11 +65,11 @@ Run `ZendeskTransientRecovery` and show:
 - NetSuite ran only once;
 - final state is `PROVISIONED`.
 
-Use the correlation ID to connect the job, HTTP calls, and lifecycle row.
+I use the correlation ID to connect the job, HTTP calls, and lifecycle row.
 
 ## 6. Production considerations
 
-Briefly cover:
+I briefly cover:
 
 - durable queue and five-request NetSuite worker;
 - Sunday outage backlog and recovery;
@@ -78,4 +78,4 @@ Briefly cover:
 - PII-safe logs;
 - read-only provisioning status MCP tool for Slack.
 
-End by stating which pieces are working prototypes and which are production architecture proposals.
+I end by identifying which pieces are working prototypes and which are production architecture proposals.

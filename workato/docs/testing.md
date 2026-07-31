@@ -1,6 +1,6 @@
 # Workato tests
 
-The PowerShell runner creates nested webhook payloads that match the current Workato trigger schema. Each run uses unique identifiers.
+I use the PowerShell runner to create nested webhook payloads that match my current Workato trigger schema. Each run uses unique identifiers.
 
 ## Preview without using credits
 
@@ -22,7 +22,7 @@ $env:WORKATO_WEBHOOK_URL = "https://webhooks.example/replace-me"
   -ResetMockState
 ```
 
-The webhook URL is intentionally not stored in Git.
+I intentionally keep the webhook URL out of Git.
 
 ## Cases
 
@@ -45,16 +45,16 @@ Run paired cases together:
 .\workato\scripts\test-workflow.ps1 -Cases ConflictSeed,ConflictChanged
 ```
 
-## Evidence to collect
+## Evidence I collect
 
-For the happy path, verify:
+For the happy path, I verify:
 
 - job result is Successful;
 - Step 17 ran;
 - lifecycle state is `PROVISIONED`;
 - NetSuite and Zendesk IDs are stored.
 
-For transient recovery, verify:
+For transient recovery, I verify:
 
 - Java ran once;
 - NetSuite ran once;
@@ -63,6 +63,6 @@ For transient recovery, verify:
 - Zendesk later succeeded;
 - final state is `PROVISIONED`.
 
-For duplicate replay, verify that Java, NetSuite, and Zendesk do not run during the second event.
+For duplicate replay, I verify that Java, NetSuite, and Zendesk do not run during the second event.
 
-The runner saves a JSON report under `test-results`. Generated reports are ignored by Git.
+I save the generated JSON report under `test-results`. Git ignores these generated reports.

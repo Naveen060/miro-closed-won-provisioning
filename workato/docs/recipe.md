@@ -9,7 +9,7 @@ This document matches the recipe I built in Workato.
 - Validation connection: `Order Validation HTTP Secure v2`
 - Mock connection: `Provisioning Mock Systems v2`
 
-The connections hold the base URLs and `X-API-Key`. Secrets are not entered in recipe formulas.
+I use the connections to hold the base URLs and `X-API-Key`. I do not enter secrets in recipe formulas.
 
 ## Webhook schema
 
@@ -42,7 +42,7 @@ The connections hold the base URLs and `X-API-Key`. Secrets are not entered in r
 
 ## Data-table purpose
 
-One row represents one Closed Won event. The table stores business state across Workato, Java, NetSuite, and Zendesk.
+I use one row for each Closed Won event. The table stores the business state across Workato, Java, NetSuite, and Zendesk.
 
 Important columns include:
 
@@ -115,7 +115,7 @@ Idempotency-Key: <opportunity_id>:netsuite
 X-Correlation-Id: <correlation_id>
 ```
 
-NetSuite stays outside the Zendesk monitor. A Zendesk retry therefore cannot rerun it.
+I keep NetSuite outside the Zendesk monitor so a Zendesk retry cannot rerun it.
 
 ## Step 13: Zendesk mock
 
@@ -138,7 +138,7 @@ Body:
 }
 ```
 
-The Boolean datapill is not placed inside quotation marks.
+I leave the Boolean datapill outside quotation marks so Workato sends a Boolean rather than a string.
 
 Response schema:
 
@@ -158,4 +158,4 @@ PROVISIONED       all required actions completed
 NEEDS_ATTENTION   Zendesk still failed after retries
 ```
 
-The successful path ends automatically after Step 17. The persistent failure path ends explicitly at Step 16.
+I allow the successful path to end automatically after Step 17. I end the persistent failure path explicitly at Step 16.
