@@ -114,7 +114,7 @@ $testCases = @(
     [pscustomobject]@{
         Name = "MissingAccountId"
         ExpectedFinalResult = "Failed at validation"
-        ExpectedEvidence = "Step 2 returns HTTP 400 because accountId is missing."
+        ExpectedEvidence = "Step 7 returns HTTP 400 because accountId is missing."
         Payload = [ordered]@{
             opportunityId = "OPP-NO-ACCOUNT-$runId"
             accountName = "Missing Account Test"
@@ -128,7 +128,7 @@ $testCases = @(
     [pscustomobject]@{
         Name = "MissingTotalAmount"
         ExpectedFinalResult = "Failed at validation"
-        ExpectedEvidence = "Step 2 returns HTTP 400 because totalAmount is missing."
+        ExpectedEvidence = "Step 7 returns HTTP 400 because totalAmount is missing."
         Payload = [ordered]@{
             opportunityId = "OPP-NO-AMOUNT-$runId"
             accountId = "ACC-NO-AMOUNT-$runId"
@@ -142,7 +142,7 @@ $testCases = @(
     [pscustomobject]@{
         Name = "ZeroAmount"
         ExpectedFinalResult = "Failed at validation"
-        ExpectedEvidence = "Step 2 returns HTTP 400 because totalAmount must be at least 0.01."
+        ExpectedEvidence = "Step 7 returns HTTP 400 because totalAmount must be at least 0.01."
         Payload = [ordered]@{
             opportunityId = "OPP-ZERO-$runId"
             accountId = "ACC-ZERO-$runId"
@@ -172,7 +172,7 @@ $testCases = @(
     [pscustomobject]@{
         Name = "ConflictChanged"
         ExpectedFinalResult = "Failed at validation"
-        ExpectedEvidence = "Step 2 returns HTTP 409: same validation idempotency key but a changed request body."
+        ExpectedEvidence = "Step 7 returns HTTP 409: same validation idempotency key but a changed request body."
         Payload = [ordered]@{
             opportunityId = $conflictOpportunityId
             accountId = $conflictAccountId
@@ -199,6 +199,41 @@ function Get-MockState {
     }
 }
 
+function ConvertTo-WorkatoWebhookPayload {
+    param([System.Collections.IDictionary]$FlatPayload)
+
+    $opportunity = [ordered]@{
+        opportunity_id = $FlatPayload.opportunityId
+        name = $FlatPayload.accountName
+        stage = "Closed Won"
+        close_date = (Get-Date -Format "yyyy-MM-dd")
+        currency = $FlatPayload.currency
+    }
+    if ($FlatPayload.Contains("totalAmount")) {
+        $opportunity.amount = $FlatPayload.totalAmount
+    }
+
+    $account = [ordered]@{
+        name = $FlatPayload.accountName
+        billing_country = $FlatPayload.countryCode
+    }
+    if ($FlatPayload.Contains("accountId")) {
+        $account.account_id = $FlatPayload.accountId
+    }
+
+    return [ordered]@{
+        event_id = "EVT-$($FlatPayload.opportunityId)"
+        correlation_id = $FlatPayload.correlationId
+        event_type = "OPPORTUNITY_CLOSED_WON"
+        occurred_at = (Get-Date).ToUniversalTime().ToString("o")
+        opportunity = $opportunity
+        account = $account
+        customer = [ordered]@{ admin_email = "integration-test@example.test" }
+        source = "salesforce"
+        simulate_zendesk_failure = $FlatPayload.simulateZendeskFailure
+    }
+}
+
 if ($PreviewOnly) {
     Write-Host "PREVIEW ONLY - no webhooks will be sent and no Workato credits will be used." -ForegroundColor Yellow
 }
@@ -216,7 +251,8 @@ $results = @()
 
 for ($index = 0; $index -lt $selectedTests.Count; $index++) {
     $testCase = $selectedTests[$index]
-    $payloadJson = $testCase.Payload | ConvertTo-Json -Depth 8 -Compress
+    $wirePayload = ConvertTo-WorkatoWebhookPayload -FlatPayload $testCase.Payload
+    $payloadJson = $wirePayload | ConvertTo-Json -Depth 8 -Compress
     $accepted = $false
     $webhookResponse = $null
     $submissionError = $null
@@ -253,7 +289,7 @@ for ($index = 0; $index -lt $selectedTests.Count; $index++) {
         webhookAccepted = $accepted
         webhookResponse = $webhookResponse
         submissionError = $submissionError
-        payload = $testCase.Payload
+        payload = $wirePayload
         observedWorkatoResult = "Fill in after checking the Workato job"
     }
 

@@ -1,75 +1,68 @@
-# Batch testing the Workato workflow
+# Workato tests
 
-The PowerShell runner sends a collection of test events to the Workato webhook. It runs them sequentially so that the duplicate and idempotency-conflict pairs remain deterministic and the Workato job history is easy to inspect.
+The PowerShell runner creates nested webhook payloads that match the current Workato trigger schema. Each run uses unique identifiers.
 
-## Before running
-
-1. Save the recipe and either start it or put it in Workato **Test** mode so the webhook is listening.
-2. Open PowerShell in the repository folder:
+## Preview without using credits
 
 ```powershell
-cd "C:\Users\chava\OneDrive\Documents\miro"
+.\scripts\test-workato-workflow.ps1 `
+  -PreviewOnly `
+  -Cases HappyPath,ZendeskTransientRecovery
 ```
 
-## Preview without using Workato credits
+## Run the two main cases
+
+Put the Workato recipe in Test mode or start it. Then run:
 
 ```powershell
-.\scripts\test-workato-workflow.ps1 -PreviewOnly
+$env:WORKATO_WEBHOOK_URL = "https://webhooks.example/replace-me"
+
+.\scripts\test-workato-workflow.ps1 `
+  -Cases HappyPath,ZendeskTransientRecovery `
+  -ResetMockState
 ```
 
-This prints every payload and creates a report, but sends no HTTP requests.
+The webhook URL is intentionally not stored in Git.
 
-## Run the complete suite
+## Cases
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\test-workato-workflow.ps1 -ResetMockState
-```
+| Case | Expected result |
+|---|---|
+| `HappyPath` | Validation, NetSuite, and Zendesk succeed |
+| `ZendeskTransientRecovery` | Zendesk fails once and then succeeds |
+| `DuplicateFirst` | First event is processed |
+| `DuplicateReplay` | Repeated event is stopped as a duplicate |
+| `MissingAccountId` | Java validation rejects the request |
+| `MissingTotalAmount` | Java validation rejects the request |
+| `ZeroAmount` | Java validation rejects the request |
+| `ConflictSeed` | First idempotent validation succeeds |
+| `ConflictChanged` | Same validation key with different input returns conflict |
 
-The complete suite submits nine Workato jobs. `-ResetMockState` clears only the NetSuite/Zendesk mock data; it does not clear the separate validator cache. Each run therefore creates unique identifiers automatically.
-
-## Run only selected cases
-
-Use this when you want to conserve credits:
-
-```powershell
-.\scripts\test-workato-workflow.ps1 -Cases HappyPath,ZendeskTransientRecovery
-```
-
-Available names are:
-
-- `HappyPath`
-- `ZendeskTransientRecovery`
-- `DuplicateFirst`
-- `DuplicateReplay`
-- `MissingAccountId`
-- `MissingTotalAmount`
-- `ZeroAmount`
-- `ConflictSeed`
-- `ConflictChanged`
-
-Run dependent cases together and in their listed order:
+Run paired cases together:
 
 ```powershell
 .\scripts\test-workato-workflow.ps1 -Cases DuplicateFirst,DuplicateReplay
 .\scripts\test-workato-workflow.ps1 -Cases ConflictSeed,ConflictChanged
 ```
 
-## How to evaluate the run
+## Evidence to collect
 
-The webhook normally returns `status: ok`. That means Workato accepted the event; it does not prove the entire recipe succeeded.
+For the happy path, verify:
 
-After the runner finishes:
+- job result is Successful;
+- Step 17 ran;
+- lifecycle state is `PROVISIONED`;
+- NetSuite and Zendesk IDs are stored.
 
-1. Open the recipe's **Jobs** page.
-2. Open each job and match it to the `correlationId` shown by the runner.
-3. Compare the Workato result to `expectedFinalResult` and `expectedEvidence` in the saved report.
-4. Send back the Workato result or screenshot for every case.
+For transient recovery, verify:
 
-Reports are written to:
+- Java ran once;
+- NetSuite ran once;
+- the first Zendesk request returned HTTP 500;
+- Workato retried Step 13;
+- Zendesk later succeeded;
+- final state is `PROVISIONED`.
 
-```text
-test-results\workato-suite-YYYYMMDD-HHMMSS.json
-```
+For duplicate replay, verify that Java, NetSuite, and Zendesk do not run during the second event.
 
-The report also captures the mock system state before and after the suite, which helps verify downstream record creation, replay behavior, and Zendesk retry attempts.
+The runner saves a JSON report under `test-results`. Generated reports are ignored by Git.

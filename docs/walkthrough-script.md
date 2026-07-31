@@ -1,81 +1,79 @@
-# Seven-minute walkthrough script
+# Demonstration outline
 
-## 0:00-0:40 - Frame the problem
+This outline fits a five-to-ten-minute recording.
 
-"A Salesforce Closed-Won webhook enters the iPaaS, the Java service validates the deal, NetSuite creates the customer, and Zendesk provisions support. The design goal is at-least-once delivery without duplicate side effects. The important failure boundary retries Zendesk without re-entering NetSuite."
+## 1. Problem and design
 
-Show the architecture diagram and requirement-coverage table in the root README.
+Explain that Salesforce sends a Closed Won event to Workato. Workato validates the order, creates a NetSuite customer, and creates a Zendesk organization.
 
-## 0:40-1:30 - Show the recipe
+Point out the main rule: a Zendesk retry must never create the NetSuite customer again.
 
-Open the Workato recipe and its job history.
+## 2. Java service
 
-Point out:
+Show:
 
-- webhook trigger;
-- stable correlation ID;
-- step-scoped idempotency keys;
-- validation HTTP action;
-- NetSuite before the retry boundary; and
-- retry enabled only on the Zendesk node/monitor block.
+- `POST /api/v1/orders/validate`
+- required `accountId` and `totalAmount`
+- API-key filter
+- correlation-ID filter
+- in-memory idempotency implementation
+- concurrent-request test
 
-## 1:30-2:20 - Happy-path demo
-
-Run the happy-path case:
+Run:
 
 ```powershell
-.\scripts\test-workato-workflow.ps1 -Cases HappyPath
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+.\mvnw.cmd clean verify
 ```
 
-Open the job by correlation ID. Call out the HTTP 200 validation, one NetSuite customer, one Zendesk organization, and successful final result.
+Expected result: seven tests pass and the build succeeds.
 
-## 2:20-3:30 - Required Zendesk 500 demo
+## 3. Workato recipe
 
-Run the required failure case:
+Show the recipe from Step 1 through Step 17.
 
-```powershell
-.\scripts\test-workato-workflow.ps1 -Cases ZendeskTransientRecovery -ResetMockState
-```
+Call out:
 
-Open the job by correlation ID and narrate the evidence:
+- event duplicate check;
+- lifecycle data table;
+- Java validation call;
+- NetSuite before the monitor block;
+- only Zendesk inside the monitor block;
+- `NEEDS_ATTENTION` failure update;
+- `PROVISIONED` success update.
 
-- Zendesk attempt 1 returns the simulated 500;
-- only Zendesk is retried;
-- attempt 2 succeeds;
-- `netSuiteCalls` is exactly 1; and
-- `zendeskCalls` is exactly 2.
+## 4. Happy path
 
-This directly proves the assignment's saga invariant.
+Run `HappyPath` and show:
 
-## 3:30-5:00 - Code tour
+- successful Workato job;
+- one NetSuite call;
+- one Zendesk call;
+- populated downstream IDs;
+- `PROVISIONED` table state.
 
-Open `InMemoryIdempotencyService.java`.
+## 5. Required Saga path
 
-Explain that `ConcurrentHashMap.putIfAbsent` atomically chooses one caller, while all same-key/same-payload callers await one shared `CompletableFuture`. Point out the SHA-256 payload fingerprint, HTTP 409 on key/payload mismatch, success-only caching, and exact-candidate removal after a failure.
+Run `ZendeskTransientRecovery` and show:
 
-Open `InMemoryIdempotencyServiceTest.java`. Highlight the 24-thread simultaneous-release test and the assertion that the business operation runs once.
+- first Zendesk attempt returns 500;
+- Workato retries the monitored Zendesk action;
+- the second attempt succeeds;
+- NetSuite ran only once;
+- final state is `PROVISIONED`.
 
-Open `ApiKeyFilter.java`, `OrderValidationRequest.java`, and `OrderValidationApiTest.java` to show API-key auth, required fields, HTTP 400 behavior, and exact replayed response.
+Use the correlation ID to connect the job, HTTP calls, and lifecycle row.
 
-## 5:00-6:30 - Production architecture
+## 6. Production considerations
 
-Return to the README architecture diagram. Cover:
+Briefly cover:
 
-- durable Pub/Sub ingestion and a saga store;
-- a dedicated NetSuite queue and globally capped five-request dispatcher;
-- Sunday circuit-open window, retained messages, backoff, and DLQ;
-- correlation ID plus trace context across every hop;
-- Workato Connections backed by a secret manager and PII allow-list logging; and
-- the read-only `get_provisioning_status` MCP tool over a status projection.
+- durable queue and five-request NetSuite worker;
+- Sunday outage backlog and recovery;
+- Datadog/Splunk correlation search;
+- Workato Connections and secret rotation;
+- PII-safe logs;
+- read-only provisioning status MCP tool for Slack.
 
-Stress that in-memory idempotency is the exercise constraint, not the production recommendation.
-
-## 6:30-7:00 - Close
-
-Run or show the result of:
-
-```powershell
-.\mvnw.cmd test
-```
-
-Close with: "The prototype proves the API contract, strict race-safe idempotency, and the Zendesk-only retry. The production design adds durable state, queued backpressure, cross-instance idempotency, and governed read access for AI."
+End by stating which pieces are working prototypes and which are production architecture proposals.

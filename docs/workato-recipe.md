@@ -1,111 +1,161 @@
-# Workato recipe build sheet
+# Workato recipe
 
-This is the canonical orchestration definition for this repository. It uses only the Webhooks and HTTP connectors, so no NetSuite or Zendesk sandbox is required.
+This document matches the recipe I built in Workato.
 
-## Connections and properties
+## Assets
 
-Create HTTP connections for:
+- Recipe: `Closed-Won Provisioning Orchestration v2`
+- Data table: `Provisioning Status v2`
+- Validation connection: `Order Validation HTTP Secure v2`
+- Mock connection: `Provisioning Mock Systems v2`
 
-- validation service base URL;
-- NetSuite mock base URL; and
-- Zendesk mock base URL.
+The connections hold the base URLs and `X-API-Key`. Secrets are not entered in recipe formulas.
 
-Store `VALIDATION_API_KEY` in the validation HTTP connection or the workspace secret manager. Do not put it in a formula or lookup table. Use the deployed validation and mock-service URLs; Workato cannot call `localhost` on the candidate's machine.
-
-## Trigger sample
-
-Choose **Webhooks by Workato -> New event via HTTP webhook** and use this JSON sample to define the schema:
+## Webhook schema
 
 ```json
 {
-  "opportunityId": "opp-456",
-  "accountId": "acct-123",
-  "accountName": "Acme Corp",
-  "totalAmount": 12500.50,
-  "currency": "USD",
-  "countryCode": "US",
-  "correlationId": "47c2ba99-a18f-4e2b-933c-b68ef1b3ad09",
-  "simulateZendeskFailure": false
+  "event_id": "EVT-1001",
+  "correlation_id": "CORR-1001",
+  "event_type": "OPPORTUNITY_CLOSED_WON",
+  "occurred_at": "2026-07-30T20:00:00Z",
+  "opportunity": {
+    "opportunity_id": "OPP-1001",
+    "name": "Acme Enterprise Deal",
+    "stage": "Closed Won",
+    "close_date": "2026-07-30",
+    "amount": 75000,
+    "currency": "USD"
+  },
+  "account": {
+    "account_id": "ACC-1001",
+    "name": "Acme Corp",
+    "billing_country": "US"
+  },
+  "customer": {
+    "admin_email": "integration-test@example.test"
+  },
+  "source": "salesforce",
+  "simulate_zendesk_failure": false
 }
 ```
 
-The demo treats `correlationId` as a Salesforce-generated field. If it is absent, add a **Set variable** step and generate one before making calls.
+## Data-table purpose
+
+One row represents one Closed Won event. The table stores business state across Workato, Java, NetSuite, and Zendesk.
+
+Important columns include:
+
+- `event_id`
+- `opportunity_id`
+- `account_id`
+- `account_name`
+- `correlation_id`
+- `state`
+- `validation_id`
+- `netsuite_customer_id`
+- `zendesk_organization_id`
+- replay flags
+- retry and error fields
+- created and updated timestamps
 
 ## Recipe steps
 
-### 1. Validate order
+| Step | Action | Main configuration |
+|---:|---|---|
+| 1 | HTTP webhook trigger | Receive the nested payload above |
+| 2 | Search `Provisioning Status v2` | `event_id` equals Step 1 Event ID; limit 1 |
+| 3 | IF record is present | Detect a duplicate event |
+| 4 | Stop job successfully | Duplicate event is ignored |
+| 5 | Create data-table record | Map the Step 1 event, opportunity, account, and correlation fields |
+| 6 | Update record | Record ID from Step 5; state `VALIDATION_PENDING` |
+| 7 | HTTP validation | `POST /api/v1/orders/validate` |
+| 8 | Update record | State `VALIDATED`; store validation response |
+| 9 | HTTP NetSuite mock | `POST /netsuite/customers` |
+| 10 | Update record | State `NETSUITE_CREATED`; store customer ID and replay flag |
+| 11 | Update record | State `ZENDESK_PENDING` |
+| 12 | Handle errors | Monitor only the Zendesk action |
+| 13 | HTTP Zendesk mock | `POST /zendesk/organizations` |
+| 14 | Retry | Retry monitored action up to 3 times, 2 seconds apart |
+| 15 | Update persistent failure | State `NEEDS_ATTENTION`; save retry and safe error fields |
+| 16 | Stop job as failed | Explain that Zendesk failed after retries |
+| 17 | Update successful result | State `PROVISIONED`; store Zendesk organization ID |
 
-Add **HTTP -> Send request**:
+Step 17 is outside the persistent-error branch. When it finishes, Workato ends the job successfully automatically.
+
+## Step 7: Java validation
 
 ```text
 Method: POST
 Path: /api/v1/orders/validate
-Content-Type: application/json
-X-API-Key: connection secret
-Idempotency-Key: <opportunityId>:validation
-X-Correlation-Id: <correlationId>
+Content type: Raw JSON
+Idempotency-Key: <Step 1 opportunity_id>:validation
+X-Correlation-Id: <Step 1 correlation_id>
+Mark non-2xx as success: No
 ```
 
-Map `accountId`, `totalAmount`, `currency`, `countryCode`, and `opportunityId` into the JSON body. Stop the job as failed for HTTP 400/401/409; those are not transient.
+Body:
 
-### 2. Create the NetSuite customer stub
+```json
+{
+  "accountId": "<Step 1 account.account_id>",
+  "totalAmount": "<Step 1 opportunity.amount>",
+  "currency": "<Step 1 opportunity.currency>",
+  "countryCode": "<Step 1 account.billing_country>",
+  "opportunityId": "<Step 1 opportunity.opportunity_id>"
+}
+```
 
-Add **HTTP -> Send request** before any error-monitor block:
+## Step 9: NetSuite mock
 
 ```text
 Method: POST
 Path: /netsuite/customers
-Idempotency-Key: <opportunityId>:netsuite
-X-Correlation-Id: <correlationId>
+Idempotency-Key: <opportunity_id>:netsuite
+X-Correlation-Id: <correlation_id>
 ```
 
-Map the account ID and validation status. Capture `customerId` from the response.
+NetSuite stays outside the Zendesk monitor. A Zendesk retry therefore cannot rerun it.
 
-### 3. Create a Zendesk-only retry boundary
-
-Add **Handle errors**. Configure the **Monitor actions for error** block with exactly one action: the Zendesk HTTP call.
+## Step 13: Zendesk mock
 
 ```text
 Method: POST
 Path: /zendesk/organizations
-Idempotency-Key: <opportunityId>:zendesk
-X-Correlation-Id: <correlationId>
-Body: accountId, NetSuite customerId, simulateTransientFailure
+Idempotency-Key: <opportunity_id>:zendesk
+X-Correlation-Id: <correlation_id>
+Mark non-2xx as success: No
+Wait for response: No
 ```
 
-Configure the error block:
+Body:
+
+```json
+{
+  "accountId": "<Step 1 account.account_id>",
+  "netSuiteCustomerId": "<Step 9 customerId>",
+  "simulateTransientFailure": <Step 1 simulate_zendesk_failure>
+}
+```
+
+The Boolean datapill is not placed inside quotation marks.
+
+Response schema:
+
+```json
+{
+  "organizationId": "zd-0001",
+  "netSuiteCustomerId": "ns-0001",
+  "correlationId": "CORR-1001",
+  "replayed": false
+}
+```
+
+## Final states
 
 ```text
-Retry actions in Monitor block: 3
-Time interval between retries: 2 seconds
-Retry IF: HTTP status is 500-599 (when the status datapill is available)
+PROVISIONED       all required actions completed
+NEEDS_ATTENTION   Zendesk still failed after retries
 ```
 
-The critical placement is NetSuite outside the monitor block. Workato retries the monitored action, so a Zendesk 500 does not execute NetSuite again. The mock also honors its own step-scoped idempotency key, making a manual replay of the entire Workato job safe.
-
-After retries are exhausted, write a redacted event to the Workato Logging Service with correlation ID, opportunity ID, failed step, stable error category, and retry count. Then **Stop job** as failed so RecipeOps can alert. Never log the customer body, connection headers, or API key.
-
-### 4. Record completion
-
-After the Handle errors block, record `PROVISIONED`, NetSuite customer ID, Zendesk organization ID, correlation ID, and completion time. In production this is a durable saga-state update. In the prototype, the Workato job output is sufficient.
-
-## Test cases
-
-### Happy path
-
-Post the trigger sample with `simulateZendeskFailure: false`. Verify one green execution for validation, NetSuite, and Zendesk.
-
-### Required saga path
-
-Post a new opportunity with `simulateZendeskFailure: true`. In job detail, verify:
-
-- validation ran once;
-- NetSuite ran once;
-- Zendesk attempt 1 returned HTTP 500;
-- Workato retried Zendesk;
-- Zendesk attempt 2 returned success; and
-- the job finished as provisioned.
-
-The current Workato documentation describes a maximum of three retries and a one-to-ten-second interval for a Handle errors block: [Error handling best practices](https://docs.workato.com/recipes/best-practices-error-handling). The HTTP action and secret-storage behavior are documented under [Send request via HTTP](https://docs.workato.com/en/developing-connectors/http/building-http-action).
-
-For repeatable webhook testing, follow [batch-workflow-tests.md](batch-workflow-tests.md). The runner submits nine cases and records the correlation IDs needed to inspect final results in Workato Jobs.
+The successful path ends automatically after Step 17. The persistent failure path ends explicitly at Step 16.
