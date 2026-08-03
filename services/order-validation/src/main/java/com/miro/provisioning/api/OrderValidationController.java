@@ -15,6 +15,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+/**
+ * HTTP boundary used by Workato to validate a Closed Won order before any
+ * downstream provisioning starts.
+ *
+ * <p>The controller intentionally remains thin: Bean Validation checks the
+ * transport contract, while {@link OrderValidationService} owns idempotency
+ * and business orchestration.</p>
+ */
 public class OrderValidationController {
 
     public static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
@@ -31,6 +39,7 @@ public class OrderValidationController {
             @RequestHeader(IDEMPOTENCY_HEADER) String idempotencyKey,
             @Valid @RequestBody OrderValidationRequest request
     ) {
+        // CorrelationIdFilter establishes this value before the controller runs.
         IdempotentResult<OrderValidationResponse> result = orderValidationService.validate(
                 request,
                 idempotencyKey,

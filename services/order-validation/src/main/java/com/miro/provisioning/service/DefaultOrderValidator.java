@@ -15,6 +15,12 @@ import java.util.Map;
 @Component
 public class DefaultOrderValidator implements OrderValidator {
 
+    private static final String DEFAULT_CURRENCY = "USD";
+    private static final String DEFAULT_COUNTRY = "US";
+    private static final String VALID_STATUS = "VALID";
+    private static final String INTERNATIONAL_REVIEW = "INTERNATIONAL_REVIEW";
+    private static final BigDecimal HIGH_VALUE_THRESHOLD = new BigDecimal("1000000");
+
     private static final Map<String, String> TAX_ROUTES = Map.of(
             "US", "US_STATE_SALES_TAX",
             "CA", "CANADA_GST_HST",
@@ -34,28 +40,31 @@ public class DefaultOrderValidator implements OrderValidator {
 
     @Override
     public OrderValidationResponse validate(OrderValidationRequest request, String correlationId) {
-        String currency = normalizedOrDefault(request.currency(), "USD");
-        String country = normalizedOrDefault(request.countryCode(), "US");
-        String taxRoute = TAX_ROUTES.getOrDefault(country, "INTERNATIONAL_REVIEW");
+        String currency = normalizedOrDefault(request.currency(), DEFAULT_CURRENCY);
+        String country = normalizedOrDefault(request.countryCode(), DEFAULT_COUNTRY);
+        String taxRoute = TAX_ROUTES.getOrDefault(country, INTERNATIONAL_REVIEW);
 
+        return new OrderValidationResponse(
+                request.accountId(),
+                VALID_STATUS,
+                request.totalAmount(),
+                currency,
+                taxRoute,
+                complianceChecks(request.totalAmount(), taxRoute),
+                correlationId,
+                Instant.now(clock)
+        );
+    }
+
+    private static List<String> complianceChecks(BigDecimal totalAmount, String taxRoute) {
         List<String> checks = new ArrayList<>();
         checks.add("REQUIRED_FIELDS_PASSED");
         checks.add("SANCTIONS_SCREEN_PASSED");
         checks.add("TAX_ROUTE_" + taxRoute);
-        if (request.totalAmount().compareTo(new BigDecimal("1000000")) >= 0) {
+        if (totalAmount.compareTo(HIGH_VALUE_THRESHOLD) >= 0) {
             checks.add("HIGH_VALUE_DEAL_REVIEW_REQUIRED");
         }
-
-        return new OrderValidationResponse(
-                request.accountId(),
-                "VALID",
-                request.totalAmount(),
-                currency,
-                taxRoute,
-                List.copyOf(checks),
-                correlationId,
-                Instant.now(clock)
-        );
+        return List.copyOf(checks);
     }
 
     private static String normalizedOrDefault(String value, String defaultValue) {
@@ -64,4 +73,3 @@ public class DefaultOrderValidator implements OrderValidator {
                 : value.trim().toUpperCase(Locale.ROOT);
     }
 }
-

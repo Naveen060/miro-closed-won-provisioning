@@ -6,6 +6,12 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 
+/**
+ * Stable request contract accepted from Workato.
+ *
+ * <p>Only fields required to make a validation decision are accepted. This
+ * keeps customer PII out of the validation service and its diagnostic data.</p>
+ */
 public record OrderValidationRequest(
         @NotBlank(message = "accountId is required")
         String accountId,
@@ -19,4 +25,3 @@ public record OrderValidationRequest(
         String opportunityId
 ) {
 }
-

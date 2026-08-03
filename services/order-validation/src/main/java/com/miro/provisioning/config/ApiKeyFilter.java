@@ -7,7 +7,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
@@ -29,10 +28,10 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     public ApiKeyFilter(
-            @Value("${app.security.api-key}") String expectedApiKey,
+            SecurityProperties securityProperties,
             ObjectMapper objectMapper
     ) {
-        this.expectedApiKey = expectedApiKey.getBytes(StandardCharsets.UTF_8);
+        this.expectedApiKey = securityProperties.apiKey().getBytes(StandardCharsets.UTF_8);
         this.objectMapper = objectMapper;
     }
 
@@ -52,6 +51,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
                 ? new byte[0]
                 : supplied.getBytes(StandardCharsets.UTF_8);
 
+        // A constant-time comparison reduces timing information leaked by a bad key.
         if (!MessageDigest.isEqual(expectedApiKey, suppliedBytes)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -70,4 +70,3 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
-

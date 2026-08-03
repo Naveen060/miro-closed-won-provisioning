@@ -20,6 +20,8 @@ public class InMemoryIdempotencyService {
     ) {
         validateKey(key);
 
+        // putIfAbsent elects exactly one caller to execute the operation. Other
+        // concurrent callers wait on the same future and receive the same response.
         Entry candidate = new Entry(requestFingerprint, new CompletableFuture<>());
         Entry existing = entries.putIfAbsent(key, candidate);
         if (existing != null) {

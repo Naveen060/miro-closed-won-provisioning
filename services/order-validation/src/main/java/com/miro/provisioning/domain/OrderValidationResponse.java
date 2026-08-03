@@ -4,6 +4,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Validation decision returned to Workato. The field names are part of the
+ * integration contract and are intentionally kept independent of internal
+ * implementation classes.
+ */
 public record OrderValidationResponse(
         String accountId,
         String validationStatus,
@@ -15,4 +20,3 @@ public record OrderValidationResponse(
         Instant processedAt
 ) {
 }
-

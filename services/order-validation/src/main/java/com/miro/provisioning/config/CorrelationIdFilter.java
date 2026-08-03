@@ -16,6 +16,13 @@ import java.util.regex.Pattern;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+/**
+ * Establishes one safe correlation ID for every request and exposes it in the
+ * response, logs, and validation response body.
+ *
+ * <p>Caller-supplied values are restricted to a conservative character set to
+ * prevent log injection. Invalid or missing values are replaced with a UUID.</p>
+ */
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Correlation-Id";
@@ -32,13 +39,14 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
                 ? supplied
                 : UUID.randomUUID().toString();
 
+        // MDC automatically enriches every log emitted on this request thread.
         MDC.put("correlationId", correlationId);
         response.setHeader(HEADER, correlationId);
         try {
             filterChain.doFilter(request, response);
         } finally {
+            // Thread pools reuse threads, so MDC state must never leak to the next request.
             MDC.remove("correlationId");
         }
     }
 }
-
