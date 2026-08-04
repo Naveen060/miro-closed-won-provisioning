@@ -303,7 +303,9 @@ if (-not $PreviewOnly) {
     $stateAfter = Get-MockState -BaseUrl $MockBaseUrl
 }
 
-$resultDirectory = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\..\test-results"))
+# The runner lives three levels below the repository root after the automation
+# package reorganization. Keep generated evidence in the shared ignored folder.
+$resultDirectory = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\..\..\test-results"))
 New-Item -ItemType Directory -Path $resultDirectory -Force | Out-Null
 $reportPath = Join-Path $resultDirectory "workato-suite-$runId.json"
 

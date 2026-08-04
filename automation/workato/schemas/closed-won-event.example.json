@@ -1,0 +1,24 @@
+{
+  "event_id": "EVT-HAPPY-001",
+  "correlation_id": "CORR-HAPPY-001",
+  "event_type": "OPPORTUNITY_CLOSED_WON",
+  "occurred_at": "2026-08-04T12:00:00Z",
+  "source": "salesforce",
+  "opportunity": {
+    "opportunity_id": "OPP-HAPPY-001",
+    "name": "Acme Enterprise Deal",
+    "stage": "Closed Won",
+    "close_date": "2026-08-04",
+    "amount": 25000,
+    "currency": "USD"
+  },
+  "account": {
+    "account_id": "ACC-HAPPY-001",
+    "name": "Acme Corp",
+    "billing_country": "US"
+  },
+  "customer": {
+    "admin_email": "provisioning-test@example.com"
+  },
+  "simulate_zendesk_failure": false
+}
