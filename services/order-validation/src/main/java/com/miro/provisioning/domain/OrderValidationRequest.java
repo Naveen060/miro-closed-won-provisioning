@@ -11,6 +11,10 @@ import java.math.BigDecimal;
  *
  * <p>Only fields required to make a validation decision are accepted. This
  * keeps customer PII out of the validation service and its diagnostic data.</p>
+ *
+ * <p>Currency and country are optional because the validator applies explicit
+ * USD and US defaults. Account ID and a positive amount are mandatory and are
+ * rejected by Bean Validation before business processing begins.</p>
  */
 public record OrderValidationRequest(
         @NotBlank(message = "accountId is required")

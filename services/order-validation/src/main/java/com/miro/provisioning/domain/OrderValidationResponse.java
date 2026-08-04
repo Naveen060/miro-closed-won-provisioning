@@ -8,6 +8,10 @@ import java.util.List;
  * Validation decision returned to Workato. The field names are part of the
  * integration contract and are intentionally kept independent of internal
  * implementation classes.
+ *
+ * @param complianceChecks immutable audit markers for the rules that ran
+ * @param correlationId identifier shared with response headers and server logs
+ * @param processedAt timestamp of the original execution, preserved on replay
  */
 public record OrderValidationResponse(
         String accountId,

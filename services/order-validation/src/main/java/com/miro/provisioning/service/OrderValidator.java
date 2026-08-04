@@ -9,5 +9,9 @@ import com.miro.provisioning.domain.OrderValidationResponse;
  */
 public interface OrderValidator {
 
+    /**
+     * Applies business rules and returns an immutable decision snapshot.
+     * Implementations must propagate the correlation ID into that snapshot.
+     */
     OrderValidationResponse validate(OrderValidationRequest request, String correlationId);
 }

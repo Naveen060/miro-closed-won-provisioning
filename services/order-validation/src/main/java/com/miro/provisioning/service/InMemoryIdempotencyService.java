@@ -9,8 +9,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 @Service
+/**
+ * Process-local idempotency coordinator for order validation requests.
+ *
+ * <p>Each key owns a fingerprint and a future. The future lets concurrent
+ * duplicates share one in-flight computation, while the fingerprint prevents
+ * a key from being reused for a different payload. Successful results remain
+ * cached for the lifetime of this service instance; failures are removed so a
+ * later retry can execute again.</p>
+ */
 public class InMemoryIdempotencyService {
 
+    // ConcurrentHashMap makes key election atomic without serializing unrelated keys.
     private final ConcurrentHashMap<String, Entry> entries = new ConcurrentHashMap<>();
 
     public IdempotentResult<OrderValidationResponse> execute(
@@ -30,10 +40,15 @@ public class InMemoryIdempotencyService {
         }
 
         try {
+            // Only the thread that inserted candidate reaches this operation.
             OrderValidationResponse response = operation.get();
+            // Complete before returning so all waiting duplicates observe the
+            // exact same immutable response, including its processed timestamp.
             candidate.result().complete(response);
             return new IdempotentResult<>(response, false);
         } catch (RuntimeException | Error error) {
+            // Wake current waiters with the same failure, then remove only our
+            // candidate entry so a later request may retry the transient work.
             candidate.result().completeExceptionally(error);
             entries.remove(key, candidate);
             throw error;
@@ -41,6 +56,7 @@ public class InMemoryIdempotencyService {
     }
 
     private static void validateKey(String key) {
+        // Bound key size to avoid unbounded attacker-controlled map metadata.
         if (key == null || key.isBlank()) {
             throw new InvalidIdempotencyKeyException("Idempotency-Key must not be blank");
         }
@@ -59,6 +75,8 @@ public class InMemoryIdempotencyService {
         try {
             return result.join();
         } catch (CompletionException error) {
+            // Preserve application exception types so the global API handler can
+            // apply the same response mapping to original and duplicate callers.
             if (error.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
@@ -67,6 +85,8 @@ public class InMemoryIdempotencyService {
     }
 
     private record Entry(
+            // The fingerprint establishes payload identity; the future represents
+            // either an in-flight operation or its completed immutable response.
             String requestFingerprint,
             CompletableFuture<OrderValidationResponse> result
     ) {

@@ -34,6 +34,8 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        // Preserve a safe caller ID when supplied so cross-system traces line up;
+        // otherwise create a server-owned ID that cannot inject content into logs.
         String supplied = request.getHeader(HEADER);
         String correlationId = supplied != null && SAFE_VALUE.matcher(supplied).matches()
                 ? supplied
@@ -41,6 +43,8 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
         // MDC automatically enriches every log emitted on this request thread.
         MDC.put("correlationId", correlationId);
+        // Echo the canonical value so callers know which ID the service used,
+        // including when an unsafe supplied value had to be replaced.
         response.setHeader(HEADER, correlationId);
         try {
             filterChain.doFilter(request, response);
