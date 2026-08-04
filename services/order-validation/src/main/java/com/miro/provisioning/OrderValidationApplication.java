@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 @ConfigurationPropertiesScan
 public class OrderValidationApplication {
 
+    /** Boots Spring, component scanning, web infrastructure, and typed settings. */
     public static void main(String[] args) {
         SpringApplication.run(OrderValidationApplication.class, args);
     }

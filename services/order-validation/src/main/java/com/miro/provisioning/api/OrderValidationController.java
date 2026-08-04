@@ -35,6 +35,13 @@ public class OrderValidationController {
     }
 
     @PostMapping("/validate")
+    /**
+     * Validates one order under the supplied idempotency key.
+     *
+     * @param idempotencyKey caller-owned key identifying one logical operation
+     * @param request validated, PII-minimized order contract
+     * @return the original or replayed decision plus replay response metadata
+     */
     public ResponseEntity<OrderValidationResponse> validate(
             @RequestHeader(IDEMPOTENCY_HEADER) String idempotencyKey,
             @Valid @RequestBody OrderValidationRequest request
@@ -46,6 +53,8 @@ public class OrderValidationController {
                 MDC.get("correlationId")
         );
 
+        // The replay signal is metadata rather than part of the decision body so
+        // replayed responses remain byte-for-byte compatible with the original.
         return ResponseEntity.ok()
                 .header(REPLAYED_HEADER, Boolean.toString(result.replayed()))
                 .body(result.value());

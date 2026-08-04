@@ -5,6 +5,8 @@ import test from 'node:test';
 const port = 18081;
 const baseUrl = `http://127.0.0.1:${port}`;
 
+// Poll health instead of sleeping for a fixed duration. This keeps the test
+// fast on a responsive machine and reliable when process startup is slower.
 async function waitUntilReady() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
@@ -19,6 +21,8 @@ async function waitUntilReady() {
 }
 
 test('accepts a PII-safe provisioning alert and exposes its count', async () => {
+  // Run the real server entry point in an isolated child process and override
+  // its port so the test does not collide with a developer's local instance.
   const child = spawn(process.execPath, ['mock-systems.mjs'], {
     cwd: new URL('.', import.meta.url),
     env: { ...process.env, MOCK_SYSTEMS_PORT: String(port) },
@@ -56,11 +60,14 @@ test('accepts a PII-safe provisioning alert and exposes its count', async () => 
     });
     assert.equal(invalidResponse.status, 400);
 
+    // The rejected payload must not increment accepted-alert state. Checking
+    // both counters protects the endpoint's validation-before-mutation order.
     const stateResponse = await fetch(`${baseUrl}/state`);
     const state = await stateResponse.json();
     assert.equal(state.alertCalls, 1);
     assert.equal(state.provisioningAlerts, 1);
   } finally {
+    // Always release the child process, including when an assertion fails.
     child.kill();
   }
 });

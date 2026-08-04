@@ -1,6 +1,10 @@
 .git
+.github
 .idea
 .vscode
-target
+**/target
+node_modules
+artifacts
+test-results
 tmp
 *.log

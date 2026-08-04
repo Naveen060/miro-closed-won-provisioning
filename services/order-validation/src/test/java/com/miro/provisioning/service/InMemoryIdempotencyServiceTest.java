@@ -21,10 +21,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryIdempotencyServiceTest {
 
+    // Use more workers than a typical request burst to exercise the atomic
+    // winner-selection path rather than a merely sequential cache lookup.
     private final ExecutorService executor = Executors.newFixedThreadPool(24);
 
     @AfterEach
     void shutDownExecutor() throws InterruptedException {
+        // Prevent test worker threads from leaking into later Maven tests.
         executor.shutdownNow();
         executor.awaitTermination(2, TimeUnit.SECONDS);
     }
@@ -37,6 +40,8 @@ class InMemoryIdempotencyServiceTest {
         CountDownLatch start = new CountDownLatch(1);
 
         Callable<IdempotentResult<OrderValidationResponse>> request = () -> {
+            // Signal that every worker exists, then release them together to
+            // maximize contention for the same idempotency-key map entry.
             ready.countDown();
             start.await(2, TimeUnit.SECONDS);
             return service.execute("same-key", "same-fingerprint", () -> {
@@ -61,6 +66,8 @@ class InMemoryIdempotencyServiceTest {
                 .map(InMemoryIdempotencyServiceTest::get)
                 .toList();
 
+        // Exactly one original response and 23 replay flags prove that callers
+        // shared one completed future rather than performing duplicate work.
         assertThat(operationCount).hasValue(1);
         assertThat(results).extracting(result -> result.value().processedAt()).containsOnly(Instant.EPOCH);
         assertThat(results).filteredOn(result -> !result.replayed()).hasSize(1);
@@ -77,6 +84,8 @@ class InMemoryIdempotencyServiceTest {
             throw new IllegalStateException("transient failure");
         })).isInstanceOf(IllegalStateException.class);
 
+        // The same key/fingerprint must be allowed to execute after a transient
+        // failure; otherwise a temporary outage would poison the key forever.
         IdempotentResult<OrderValidationResponse> retry = service.execute(
                 "retry-key",
                 "fingerprint",
@@ -100,6 +109,7 @@ class InMemoryIdempotencyServiceTest {
     }
 
     private static <T> T get(Future<T> future) {
+        // Apply a bounded wait so a concurrency regression fails rather than hangs.
         try {
             return future.get(3, TimeUnit.SECONDS);
         } catch (Exception error) {
@@ -108,6 +118,7 @@ class InMemoryIdempotencyServiceTest {
     }
 
     private static OrderValidationResponse response() {
+        // A fixed timestamp makes exact-response sharing easy to assert.
         return new OrderValidationResponse(
                 "acct-123",
                 "VALID",
